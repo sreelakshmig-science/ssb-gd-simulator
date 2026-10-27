@@ -37,17 +37,19 @@ PROVIDERS = {
     "gemini":     {"url": "https://generativelanguage.googleapis.com/v1beta/openai", "key_env": "GEMINI_API_KEY"},
     "openrouter": {"url": "https://openrouter.ai/api/v1",                            "key_env": "OPENROUTER_API_KEY"},
     "mistral":    {"url": "https://api.mistral.ai/v1",                               "key_env": "MISTRAL_API_KEY"},
+    "xai":        {"url": "https://api.x.ai/v1",                                     "key_env": "XAI_API_KEY"},  # Grok (paid, per token)
     "ollama":     {"url": "http://localhost:11434/v1",                               "key_env": None},  # local, unlimited
 }
 
+# Setup: Grok (xAI) + Mistral + Ollama (local). Check each provider's current model names.
 PARTICIPANTS = [
-    {"name": "Llama",    "provider": "groq",       "model": "llama-3.3-70b-versatile",          "color": "\033[96m"},
-    {"name": "Gemini",   "provider": "gemini",     "model": "gemini-2.5-flash",                 "color": "\033[93m"},
-    {"name": "DeepSeek", "provider": "openrouter", "model": "deepseek/deepseek-chat-v3.1:free", "color": "\033[92m"},
-    {"name": "Qwen",     "provider": "ollama",     "model": "qwen2.5:7b",                       "color": "\033[95m"},
+    {"name": "Grok",    "provider": "xai",     "model": "grok-4.3",           "color": "\033[96m"},  # verify at docs.x.ai
+    {"name": "Mistral", "provider": "mistral", "model": "mistral-large-latest", "color": "\033[93m"},
+    {"name": "Qwen",    "provider": "ollama",  "model": "qwen2.5:7b",         "color": "\033[95m"},  # ollama pull qwen2.5:7b
 ]
-# Neutral model: generates stances, fact-checks, and judges. Ideally NOT one of the debaters.
-NEUTRAL = {"name": "Neutral", "provider": "gemini", "model": "gemini-2.5-flash"}
+# Neutral model: generates stances, fact-checks, and judges. Using Mistral's smaller model
+# keeps Grok (paid) out of the many extra fact-check calls.
+NEUTRAL = {"name": "Neutral", "provider": "mistral", "model": "mistral-small-latest"}
 
 RESET, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 RED, GREEN, YELLOW, GREY = "\033[91m", "\033[92m", "\033[93m", "\033[90m"
@@ -200,8 +202,32 @@ def human_turn(p, left):
 
 
 # ------------------------------------------------------------------ main loop
+def available(p):
+    """True if the provider's key is set (or, for Ollama, the local server is running)."""
+    prov = PROVIDERS[p["provider"]]
+    if prov["key_env"]:
+        return bool(os.getenv(prov["key_env"]))
+    try:
+        requests.get(prov["url"].replace("/v1", ""), timeout=2)
+        return True
+    except requests.RequestException:
+        return False
+
+
 def run(topic, minutes, stances, delay, style, join, do_check):
-    players = [dict(p) for p in PARTICIPANTS]
+    global NEUTRAL
+    players, skipped = [], []
+    for p in PARTICIPANTS:
+        (players if available(p) else skipped).append(dict(p))
+    for p in skipped:
+        why = f"set {PROVIDERS[p['provider']]['key_env']}" if PROVIDERS[p["provider"]]["key_env"] \
+            else "start Ollama (ollama serve)"
+        print(f"{DIM}Skipping {p['name']} ({p['provider']}): {why}{RESET}")
+    if not players:
+        raise SystemExit("No AI models available. Set at least one API key or start Ollama - see README.")
+    if not available(NEUTRAL):
+        NEUTRAL = {**players[0], "name": "Neutral"}
+        print(f"{DIM}Neutral model unavailable; using {players[0]['name']} for fact-check and judging.{RESET}")
     n_ai = len(players)
     stances = (stances + [None] * n_ai)[:n_ai]
     if None in stances:
