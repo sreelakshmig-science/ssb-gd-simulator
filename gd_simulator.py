@@ -43,15 +43,10 @@ PROVIDERS = {
 
 # Setup: Grok (xAI) + Mistral + Ollama (local). Check each provider's current model names.
 PARTICIPANTS = [
-    {"name": "Grok",    "provider": "xai",     "model": "grok-4.3",           "color": "\033[96m"},  # verify at docs.x.ai
-    {"name": "Llama",   "provider": "groq",    "model": "llama-3.3-70b-versatile", "color": "\033[92m"},  # free key: console.groq.com
-    {"name": "Mistral", "provider": "mistral", "model": "mistral-large-latest", "color": "\033[93m"},
-    {"name": "Qwen",    "provider": "ollama",  "model": "qwen2.5:7b",         "color": "\033[95m"},  # ollama pull qwen2.5:7b
+    {"name": "Grok", "provider": "xai",    "model": "grok-4.3",   "color": "\033[96m"},
+    {"name": "Qwen", "provider": "ollama", "model": "qwen2.5:7b", "color": "\033[95m"},
 ]
-# Neutral model: generates stances, fact-checks, and judges. Using Mistral's smaller model
-# keeps Grok (paid) out of the many extra fact-check calls.
-NEUTRAL = {"name": "Neutral", "provider": "mistral", "model": "mistral-small-latest"}
-
+NEUTRAL = {"name": "Neutral", "provider": "ollama", "model": "qwen2.5:7b"}
 RESET, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 RED, GREEN, YELLOW, GREY = "\033[91m", "\033[92m", "\033[93m", "\033[90m"
 HUMAN = {"name": "You", "human": True, "color": "\033[97m"}
