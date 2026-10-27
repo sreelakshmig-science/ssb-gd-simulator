@@ -44,6 +44,7 @@ PROVIDERS = {
 # Setup: Grok (xAI) + Mistral + Ollama (local). Check each provider's current model names.
 PARTICIPANTS = [
     {"name": "Grok",    "provider": "xai",     "model": "grok-4.3",           "color": "\033[96m"},  # verify at docs.x.ai
+    {"name": "Llama",   "provider": "groq",    "model": "llama-3.3-70b-versatile", "color": "\033[92m"},  # free key: console.groq.com
     {"name": "Mistral", "provider": "mistral", "model": "mistral-large-latest", "color": "\033[93m"},
     {"name": "Qwen",    "provider": "ollama",  "model": "qwen2.5:7b",         "color": "\033[95m"},  # ollama pull qwen2.5:7b
 ]
