@@ -37,16 +37,21 @@ PROVIDERS = {
     "gemini":     {"url": "https://generativelanguage.googleapis.com/v1beta/openai", "key_env": "GEMINI_API_KEY"},
     "openrouter": {"url": "https://openrouter.ai/api/v1",                            "key_env": "OPENROUTER_API_KEY"},
     "mistral":    {"url": "https://api.mistral.ai/v1",                               "key_env": "MISTRAL_API_KEY"},
-    "xai":        {"url": "https://api.x.ai/v1",                                     "key_env": "XAI_API_KEY"},
-    "ollama":     {"url": "http://localhost:11434/v1",                               "key_env": None},
+    "xai":        {"url": "https://api.x.ai/v1",                                     "key_env": "XAI_API_KEY"},  # Grok (paid, per token)
+    "ollama":     {"url": "http://localhost:11434/v1",                               "key_env": None},  # local, unlimited
 }
 
 # Setup: Grok (xAI) + Mistral + Ollama (local). Check each provider's current model names.
 PARTICIPANTS = [
-    {"name": "Grok", "provider": "xai",    "model": "grok-4.3",   "color": "\033[96m"},
-    {"name": "Qwen", "provider": "ollama", "model": "qwen2.5:7b", "color": "\033[95m"},
+    {"name": "Grok",    "provider": "xai",     "model": "grok-4.3",           "color": "\033[96m"},  # verify at docs.x.ai
+    {"name": "Llama",   "provider": "groq",    "model": "llama-3.3-70b-versatile", "color": "\033[92m"},  # free key: console.groq.com
+    {"name": "Mistral", "provider": "mistral", "model": "mistral-large-latest", "color": "\033[93m"},
+    {"name": "Qwen",    "provider": "ollama",  "model": "qwen2.5:7b",         "color": "\033[95m"},  # ollama pull qwen2.5:7b
 ]
-NEUTRAL = {"name": "Neutral", "provider": "ollama", "model": "qwen2.5:7b"}
+# Neutral model: generates stances, fact-checks, and judges. Using Mistral's smaller model
+# keeps Grok (paid) out of the many extra fact-check calls.
+NEUTRAL = {"name": "Neutral", "provider": "mistral", "model": "mistral-small-latest"}
+
 RESET, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 RED, GREEN, YELLOW, GREY = "\033[91m", "\033[92m", "\033[93m", "\033[90m"
 HUMAN = {"name": "You", "human": True, "color": "\033[97m"}
@@ -70,7 +75,15 @@ def chat(p, messages, max_tokens=450, temperature=0.8):
             if r.status_code in (429, 500, 502, 503):
                 time.sleep(2 ** attempt + random.random())
                 continue
-            r.raise_for_status()
+            if r.status_code >= 400:
+                detail = r.text[:300].replace("\n", " ")
+                if r.status_code == 400 and "max_tokens" in body and "max_tokens" in r.text:
+                    body["max_completion_tokens"] = body.pop("max_tokens")   # some newer models want this name
+                    continue
+                if r.status_code == 400 and "temperature" in body and "temperature" in r.text:
+                    body.pop("temperature")                                  # some reasoning models reject it
+                    continue
+                raise RuntimeError(f"{p['name']} HTTP {r.status_code} (model '{p['model']}'): {detail}")
             text = r.json()["choices"][0]["message"]["content"] or ""
             return re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
         except requests.RequestException as e:
@@ -174,7 +187,7 @@ CORE RULES
 
 
 def turn_prompt(topic, transcript, name):
-    recent = "\n\n".join(f"{s}: {t}" for s, t in transcript[-9:]) or "(You are opening the discussion.)"
+    recent = "\n\n".join(f"{s}: {t}" for s, t in transcript[-9:]) or "(Nobody has spoken yet. You are the FIRST speaker: state your position briefly with one fact, and do not refer to other speakers.)"
     return f"Discussion so far on '{topic}':\n\n{recent}\n\nIt is now your turn, {name}."
 
 
@@ -358,9 +371,24 @@ def save_log(topic, transcript, ledger, result):
     print(f"\n{DIM}Saved transcript -> {path}{RESET}")
 
 
+def list_models(provider):
+    """Print the model names a provider offers for your key (use these in PARTICIPANTS)."""
+    if provider not in PROVIDERS:
+        raise SystemExit(f"Unknown provider. Choose from: {', '.join(PROVIDERS)}")
+    prov = PROVIDERS[provider]
+    key = os.getenv(prov["key_env"]) if prov["key_env"] else None
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
+    r = requests.get(prov["url"] + "/models", headers=headers, timeout=30)
+    if r.status_code >= 400:
+        raise SystemExit(f"HTTP {r.status_code}: {r.text[:300]}")
+    for m in r.json().get("data", []):
+        print(m.get("id"))
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="SSB Group Discussion Simulator")
-    ap.add_argument("topic")
+    ap.add_argument("topic", nargs="?")
+    ap.add_argument("--list-models", metavar="PROVIDER", help="list model names, e.g. xai, mistral, ollama")
     ap.add_argument("--minutes", type=float, default=8)
     ap.add_argument("--delay", type=float, default=2, help="seconds between turns (free-tier rate limits)")
     ap.add_argument("--style", choices=["ssb", "debate"], default="ssb")
@@ -368,4 +396,9 @@ if __name__ == "__main__":
     ap.add_argument("--no-factcheck", action="store_true")
     ap.add_argument("-s", "--stance", action="append", default=[], help="repeat once per AI participant")
     a = ap.parse_args()
+    if a.list_models:
+        list_models(a.list_models)
+        raise SystemExit
+    if not a.topic:
+        ap.error("please give a topic in quotes")
     run(a.topic, a.minutes, a.stance, a.delay, a.style, a.join, not a.no_factcheck)
