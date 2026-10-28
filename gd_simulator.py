@@ -37,8 +37,8 @@ PROVIDERS = {
     "gemini":     {"url": "https://generativelanguage.googleapis.com/v1beta/openai", "key_env": "GEMINI_API_KEY"},
     "openrouter": {"url": "https://openrouter.ai/api/v1",                            "key_env": "OPENROUTER_API_KEY"},
     "mistral":    {"url": "https://api.mistral.ai/v1",                               "key_env": "MISTRAL_API_KEY"},
-    "xai":        {"url": "https://api.x.ai/v1",                                     "key_env": "XAI_API_KEY"},  # Grok (paid, per token)
-    "ollama":     {"url": "http://localhost:11434/v1",                               "key_env": None},  # local, unlimited
+    "xai":        {"url": "https://api.x.ai/v1",                                     "key_env": "XAI_API_KEY"},
+    "ollama":     {"url": "http://localhost:11434/v1",                               "key_env": None},
 }
 
 # Setup: Grok (xAI) + Mistral + Ollama (local). Check each provider's current model names.
